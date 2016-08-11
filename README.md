@@ -20,3 +20,6 @@ And then run
 ```shell
 gradle clean build shadowJar & cd build/libs/ & java -jar pkgo-helper-ALPHA-1.0-all.jar -d
 ```
+
+###Acknowledgements
+Thanks to @jabbink for providing the magic values.
