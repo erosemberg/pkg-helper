@@ -14,7 +14,7 @@ An experimental smart Pokemon Go bot. Experimental because im most likely going 
 ### Installation instructions
 Just now the only way to install this is compiling it yourself, to do so clone the repo doing:
 ```shell
-git clone <repo url>
+git clone git@github.com:erosemberg/pkg-helper.git
 ```
 And then run
 ```shell
