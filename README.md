@@ -1,5 +1,5 @@
 # pkg-helper
-Pokemon GO Helper bot
+An experimental smart Pokemon Go bot. Experimental because im most likely going to break everything eventually.
 
 ### Implemented features
 - [x] Logging In and parsing longitude/latitude from properties
