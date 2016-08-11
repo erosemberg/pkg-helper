@@ -24,7 +24,7 @@ public class PKGoHelper {
             Log.red("config.properties does not exist. Please set it up before starting!");
             System.exit(0);
         }
-        Helper helper = new Helper();
+        Helper helper = Helper.getInstance();
         helper.init(properties);
     }
 }

@@ -4,10 +4,12 @@ Pokemon GO Helper bot
 ### Implemented features
 - [x] Logging In and parsing longitude/latitude from properties
 - [x] Finding nearby pokemons
-- [ ] Finding nearby pokestops
-- [ ] Walking randomly around the map
-- [ ] Looting nearby pokestops
-- [ ] Catching nearby pokemons
+- [x] Finding nearby pokestops
+- [x] Walking randomly around the map
+- [x] Looting nearby pokestops
+- [x] Catching nearby pokemons
+- [x] Automatically hatching eggs
+- [x] Automatically transferring bad pokemons with CP lower than 200 if you have more than one of the type.
 
 ### Installation instructions
 Just now the only way to install this is compiling it yourself, to do so clone the repo doing:
@@ -16,5 +18,5 @@ git clone <repo url>
 ```
 And then run
 ```shell
-gradle clean build shadowJar & cd build/libs/ & java -jar <jarfile>
+gradle clean build shadowJar & cd build/libs/ & java -jar pkgo-helper-ALPHA-1.0-all.jar -d
 ```
