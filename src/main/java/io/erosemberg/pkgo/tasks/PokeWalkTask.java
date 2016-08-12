@@ -1,30 +1,17 @@
 package io.erosemberg.pkgo.tasks;
 
-import POGOProtos.Map.Fort.FortDataOuterClass;
 import com.pokegoapi.api.PokemonGo;
-import com.pokegoapi.api.map.MapObjects;
 import com.pokegoapi.api.map.fort.Pokestop;
-import com.pokegoapi.api.map.fort.PokestopLootResult;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 import com.pokegoapi.google.common.geometry.S2LatLng;
 import io.erosemberg.pkgo.Helper;
 import io.erosemberg.pkgo.util.Lat2Long;
 import io.erosemberg.pkgo.util.Log;
-import org.omg.PortableInterceptor.SUCCESSFUL;
 
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * @author Erik Rosemberg
@@ -64,6 +51,7 @@ public class PokeWalkTask implements Runnable {
             if (steps[0] == 0) {
                 return;
             }
+            Log.green("Travelling to pokestop located ~" + Double.valueOf(distance).intValue() + "m away.");
             Log.debug("Walking to stop in " + steps[0] + " steps.");
 
             self = Helper.getInstance().schedule(new Runnable() {
@@ -80,14 +68,10 @@ public class PokeWalkTask implements Runnable {
                     S2LatLng current = S2LatLng.fromDegrees(go.getLatitude(), go.getLongitude());
                     double d = current.getEarthDistance(end);
                     initialSteps--;
-                    Log.debug("Ran, steps = " + initialSteps + ", distance = " + d);
-                    if (d < 10) {
-                        Log.green("Reached stop before what was calculated!");
-                        initialSteps = 0;
-                    }
 
-                    if (initialSteps % 20 == 0) {
-                        Log.debug("Reaching stop in " + initialSteps + " steps");
+                    Log.debug("Running, steps = " + initialSteps + ", distance = " + d);
+                    if (d <= Helper.getInstance().getConfig().getMinDistanceToLootPokestop()) { //Failsafe.
+                        initialSteps = 0;
                     }
                     if (initialSteps == 0) {
                         Log.green("Reached stop, it will loot soon.");

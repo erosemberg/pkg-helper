@@ -5,7 +5,6 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.logging.FileHandler;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
@@ -25,9 +24,7 @@ public final class Log {
             FileHandler h = new FileHandler("pkh-session-" + format.format(Calendar.getInstance().getTime()) + ".log");
             LOGGER.addHandler(h);
             SimpleFormatter formatter = new SimpleFormatter();
-            Arrays.stream(LOGGER.getHandlers()).forEach(handler -> {
-                handler.setFormatter(formatter);
-            });
+            Arrays.stream(LOGGER.getHandlers()).forEach(handler -> handler.setFormatter(formatter));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -59,6 +56,11 @@ public final class Log {
 
     public static void blue(String text) {
         String output = "\u001b[0;36m" + text + "\u001b[m ";
+        LOGGER.info(output);
+    }
+
+    public static void yellow(String text) {
+        String output = "\u001b[0;33m" + text + "\u001b[m ";
         LOGGER.info(output);
     }
 

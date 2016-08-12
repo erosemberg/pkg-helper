@@ -5,10 +5,6 @@ import com.google.common.cache.CacheBuilder;
 import com.pokegoapi.api.PokemonGo;
 import com.pokegoapi.api.map.MapObjects;
 import com.pokegoapi.api.map.fort.Pokestop;
-import com.pokegoapi.api.map.fort.PokestopLootResult;
-import com.pokegoapi.exceptions.LoginFailedException;
-import com.pokegoapi.exceptions.RemoteServerException;
-import com.pokegoapi.util.SystemTimeImpl;
 import io.erosemberg.pkgo.Helper;
 import io.erosemberg.pkgo.util.Log;
 
@@ -16,9 +12,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static io.erosemberg.pkgo.tasks.PokeWalkTask.shouldWalk;
 
 /**
  * @author Erik Rosemberg
@@ -35,8 +28,11 @@ public class PokeStopTask implements Runnable {
 
     @Override
     public void run() {
+        if (!PokeWalkTask.shouldWalk.get()) {
+            return;
+        }
         try {
-            Log.debug("Checking for pokestops...");
+            Log.info("Scanning for pokestops...");
             MapObjects objects = go.getMap().getMapObjects();
             Collection<Pokestop> pokestops = objects.getPokestops();
             if (!pokestops.isEmpty()) {

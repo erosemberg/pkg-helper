@@ -1,6 +1,7 @@
 package io.erosemberg.pkgo;
 
 import POGOProtos.Data.PlayerDataOuterClass;
+import POGOProtos.Networking.Responses.FortSearchResponseOuterClass;
 import com.pokegoapi.api.PokemonGo;
 import com.pokegoapi.api.map.fort.Pokestop;
 import com.pokegoapi.api.map.fort.PokestopLootResult;
@@ -8,17 +9,23 @@ import com.pokegoapi.api.player.PlayerProfile;
 import com.pokegoapi.auth.GoogleAutoCredentialProvider;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
+import com.pokegoapi.util.SystemTimeImpl;
+import io.erosemberg.pkgo.config.HelperConfig;
 import io.erosemberg.pkgo.tasks.PokeEggHatcher;
+import io.erosemberg.pkgo.tasks.PokeEvolveTask;
 import io.erosemberg.pkgo.tasks.PokeFinderTask;
 import io.erosemberg.pkgo.tasks.PokeProfileTask;
 import io.erosemberg.pkgo.tasks.PokeStopTask;
+import io.erosemberg.pkgo.tasks.PokeWalkBackTask;
 import io.erosemberg.pkgo.tasks.PokeWalkTask;
+import io.erosemberg.pkgo.util.ArrayUtil;
 import io.erosemberg.pkgo.util.Lat2Long;
 import io.erosemberg.pkgo.util.Log;
+import io.erosemberg.pkgo.util.Reference;
 import okhttp3.OkHttpClient;
 
 import java.util.Date;
-import java.util.Properties;
+import java.util.Scanner;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -37,6 +44,7 @@ public final class Helper {
 
     private static Helper self = new Helper();
 
+    private HelperConfig config;
     private final ScheduledExecutorService service;
     private Lat2Long location;
     private PokemonGo go;
@@ -54,41 +62,79 @@ public final class Helper {
         });
     }
 
-    void init(Properties properties) {
+    void init(HelperConfig config) {
+        this.config = config;
         OkHttpClient client = new OkHttpClient();
         try {
-            Log.green("Starting PokemonGo-Helper by erosemberg (Erik Rosemberg)");
-            if (properties == null) {
-                Log.red("config.properties does not exist!");
+            Log.green("Starting PokemonGo-Helper version " + Reference.VERSION);
+            if (config == null) {
+                Log.red("settings.json does not exist!");
                 return;
             }
-            user = properties.getProperty("email");
-            String password = properties.getProperty("password");
-            double latitude = Double.valueOf(properties.getProperty("latitude"));
-            double longitude = Double.valueOf(properties.getProperty("longitude"));
+            user = config.getEmail();
+            if (user.equals("change@me.com")) {
+                Log.green("settings.json was just generated, please edit it before running again!");
+                return;
+            }
+            String password = config.getPassword();
+
+            Scanner scanner = new Scanner(System.in);
+            System.out.print("Do you wish to use last time's latitude and longitude (yes/no)? ");
+            String input = scanner.next();
+            boolean use;
+            if (input.equalsIgnoreCase("yes")) {
+                use = true;
+            } else if (input.equalsIgnoreCase("no")) {
+                use = false;
+            } else {
+                Log.red("Failed to recognize input, defaulting to yes.");
+                use = true;
+            }
+
+            double latitude;
+            double longitude;
+            if (use) {
+                latitude = config.getLatitude();
+                longitude = config.getLongitude();
+            } else {
+                System.out.print("Please enter the desired latitude: ");
+                latitude = scanner.nextDouble();
+                System.out.print("Please enter the desired longitude: ");
+                longitude = scanner.nextDouble();
+                Log.green("Read values properly, resuming launch...");
+                config.setLatitude(latitude);
+                config.setLongitude(longitude);
+                config.save();
+            }
 
             this.location = new Lat2Long(latitude, longitude);
 
             go = new PokemonGo(new GoogleAutoCredentialProvider(client, user, password), client);
             go.setLocation(latitude, longitude, 1);
             Log.green("Logged in successfully...initiating");
-            Log.info("====================================================");
-            Log.info("PokemonGo Helper version 1.0-ALPHA has initiated.");
-            Log.info("to turn on debug, run the jar again with the -d flag");
-            Log.info("====================================================");
-            Log.info("Showing player profile data...");
-            printProfileInfo();
+            Log.yellow("====================================================");
+            Log.yellow("PokemonGo Helper version " + Reference.VERSION + " has initiated.");
+            Log.yellow("to turn on debug, run the jar again with the -d flag");
+            Log.yellow("====================================================");
+            Log.debug("Scheduling all initial tasks...");
 
+            schedule(this::printProfileInfo, 0L, 10L, TimeUnit.MINUTES);
+            schedule(new PokeProfileTask(go), 1L, 1L, TimeUnit.MINUTES);
             schedule(new PokeWalkTask(go, location), 0L, 1L, TimeUnit.SECONDS);
             schedule(new PokeFinderTask(go), 0L, 5L, TimeUnit.SECONDS);
             schedule(new PokeStopTask(go), 30L, 30L, TimeUnit.SECONDS);
-            schedule(new PokeProfileTask(go), 1L, 1L, TimeUnit.MINUTES);
             schedule(new PokeEggHatcher(go), 0L, 1L, TimeUnit.MINUTES);
+            schedule(new PokeWalkBackTask(go, location), 5L, 5L, TimeUnit.MINUTES);
+            if (config.isEvolvePokemons()) {
+                schedule(new PokeEvolveTask(go), 0L, 5L, TimeUnit.MINUTES);
+            }
 
             Runtime.getRuntime().addShutdownHook(new Thread() {
                 @Override
                 public void run() {
-                    Log.red("Handling shutdown...");
+                    Log.red("Stopping executors...");
+                    service.shutdown();
+                    Log.red("Thank you and goodbye!");
                 }
             });
         } catch (LoginFailedException | RemoteServerException e) {
@@ -102,13 +148,19 @@ public final class Helper {
         return service.scheduleAtFixedRate(runnable, initialDelay, period, unit);
     }
 
+    public void scheduleLater(Runnable runnable, long delay, TimeUnit unit) {
+        Log.debug("Scheduled task to run in " + delay + " " + unit);
+        service.schedule(runnable, delay, unit);
+    }
+
     public void loot(Pokestop closest) throws LoginFailedException, RemoteServerException {
         if (closest.canLoot()) {
             Log.debug("Pausing walking task to loot pokestop...");
             shouldWalk.set(false);
-            Log.green("Going to loot pokestop " + closest.getId());
+            Log.green("Going to loot pokestop " + closest.getDetails().getName() + (closest.hasLure() ? "(currently lured)" : ""));
             PokestopLootResult result = closest.loot();
             if (result == null) {
+                Log.red("Pokestop had no loot result, skipping");
                 shouldWalk.set(true);
                 return;
             }
@@ -124,7 +176,7 @@ public final class Helper {
                         }
                     });
                 } else {
-                    Log.green("Looted pokestop for " + result.getExperience() + " exp and " + result.getItemsAwarded() + ".");
+                    Log.green("Looted pokestop for " + result.getExperience() + " exp and " + ArrayUtil.prettyPrint(result.getItemsAwarded()) + ".");
                 }
             }
 
@@ -133,6 +185,9 @@ public final class Helper {
         } else {
             if (PokeWalkTask.target == null) {
                 PokeWalkTask.target = closest;
+            }
+            if (closest.loot().getResult() == FortSearchResponseOuterClass.FortSearchResponse.Result.OUT_OF_RANGE) {
+                return;
             }
             Log.red("Failed to loot pokestop, reason was " + closest.loot().getResult());
         }
@@ -150,6 +205,10 @@ public final class Helper {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public HelperConfig getConfig() {
+        return config;
     }
 
     public static Helper getInstance() {

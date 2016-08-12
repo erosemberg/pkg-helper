@@ -9,9 +9,9 @@ import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 import io.erosemberg.pkgo.Helper;
 import io.erosemberg.pkgo.util.Log;
+import io.erosemberg.pkgo.util.PokemonUtil;
 
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -29,9 +29,8 @@ public class PokeProfileTask implements Runnable {
 
     @Override
     public void run() {
-        Helper.getInstance().printProfileInfo();
-
         try {
+            go.getInventories().updateInventories(true); //Force inventory update.
             Map<PokemonIdOuterClass.PokemonId, Integer> countByPokemon = Maps.newHashMap();
             List<Pokemon> pokemons = go.getInventories().getPokebank().getPokemons();
             Collections.sort(pokemons, (o1, o2) -> Integer.compare(o1.getCp(), o2.getCp()));
@@ -41,7 +40,7 @@ public class PokeProfileTask implements Runnable {
                 if (countByPokemon.get(pokemon.getPokemonId()) <= 1) {
                     continue;
                 }
-                if (pokemon.getCp() >= 200) {
+                if (pokemon.getCp() >= 400) {
                     continue;
                 }
                 boolean should = !pokemon.isFavorite() || !pokemon.getNickname().isEmpty() || !pokemon.getDeployedFortId().isEmpty();
@@ -51,7 +50,7 @@ public class PokeProfileTask implements Runnable {
                     if (result != ReleasePokemonResponseOuterClass.ReleasePokemonResponse.Result.SUCCESS) {
                         Log.red("Failed to transfer " + pokemon.getPokemonId() + ", " + result);
                     } else {
-                        Log.green("Transferred " + pokemon.getPokemonId() + " with " + pokemon.getCp() + "CP");
+                        Log.green("Transferred " + pokemon.getPokemonId() + " with " + pokemon.getCp() + "CP and " + PokemonUtil.getIV(pokemon.getProto()) + "IV");
                     }
                 }
             }

@@ -1,11 +1,9 @@
 package io.erosemberg.pkgo;
 
+import io.erosemberg.pkgo.config.HelperConfig;
 import io.erosemberg.pkgo.util.ArrayUtil;
+import io.erosemberg.pkgo.util.Config;
 import io.erosemberg.pkgo.util.Log;
-
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.Properties;
 
 /**
  * @author Erik Rosemberg
@@ -16,15 +14,9 @@ public class PKGoHelper {
     public static void main(String[] args) {
         boolean debug = ArrayUtil.contains(args, "-d");
         Log.setShouldDebug(debug);
-        Properties properties = new Properties();
-        try {
-            FileInputStream input = new FileInputStream("config.properties");
-            properties.load(input);
-        } catch (IOException e) {
-            Log.red("config.properties does not exist. Please set it up before starting!");
-            System.exit(0);
-        }
+
+        HelperConfig config = Config.load(HelperConfig.class);
         Helper helper = Helper.getInstance();
-        helper.init(properties);
+        helper.init(config);
     }
 }
