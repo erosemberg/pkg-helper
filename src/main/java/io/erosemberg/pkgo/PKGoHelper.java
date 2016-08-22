@@ -12,6 +12,7 @@ import io.erosemberg.pkgo.util.Log;
 public class PKGoHelper {
 
     public static void main(String[] args) {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> Log.debug(t.getName() + " encountered an exception, " + e.getMessage()));
         boolean debug = ArrayUtil.contains(args, "-d");
         Log.setShouldDebug(debug);
 

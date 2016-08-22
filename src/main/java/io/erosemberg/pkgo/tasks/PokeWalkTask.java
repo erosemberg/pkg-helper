@@ -8,6 +8,7 @@ import com.pokegoapi.google.common.geometry.S2LatLng;
 import io.erosemberg.pkgo.Helper;
 import io.erosemberg.pkgo.util.Lat2Long;
 import io.erosemberg.pkgo.util.Log;
+import io.erosemberg.pkgo.util.PokemonUtil;
 
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -24,7 +25,7 @@ public class PokeWalkTask implements Runnable {
     public static AtomicBoolean shouldWalk = new AtomicBoolean(true);
 
     public static Pokestop target;
-    private ScheduledFuture<?> self;
+    public static ScheduledFuture<?> self;
 
     public PokeWalkTask(PokemonGo go, Lat2Long lat2Long) {
         this.go = go;
@@ -44,14 +45,18 @@ public class PokeWalkTask implements Runnable {
             S2LatLng start = S2LatLng.fromDegrees(lat2Long.getLatitude().get(), lat2Long.getLongitude().get());
             S2LatLng difference = end.sub(start);
             double distance = start.getEarthDistance(end);
-            double time = distance / 2.8;
+            double time = distance / Helper.getInstance().getConfig().getWalkingSpeed();
             double delta = 200D / 1000D;
             double thing = time / delta;
             final long[] steps = {Math.round(thing)};
             if (steps[0] == 0) {
                 return;
             }
-            Log.green("Travelling to pokestop located ~" + Double.valueOf(distance).intValue() + "m away.");
+            try {
+                String name = PokemonUtil.getName(target.getDetails());
+                Log.green("Travelling to " + name + " located ~" + Double.valueOf(distance).intValue() + "m away (ETA: " + Double.valueOf(time).intValue() + "s). Cruise speed: " + Helper.getInstance().getConfig().getWalkingSpeed());
+            } catch (LoginFailedException | RemoteServerException ignored) {
+            }
             Log.debug("Walking to stop in " + steps[0] + " steps.");
 
             self = Helper.getInstance().schedule(new Runnable() {
@@ -70,11 +75,17 @@ public class PokeWalkTask implements Runnable {
                     initialSteps--;
 
                     Log.debug("Running, steps = " + initialSteps + ", distance = " + d);
+                    if (d >= 2000) {
+                        Log.debug("Target was too far away, stopping...");
+                        shouldWalk.set(true);
+                        target = null;
+                        self.cancel(true);
+                        return;
+                    }
                     if (d <= Helper.getInstance().getConfig().getMinDistanceToLootPokestop()) { //Failsafe.
                         initialSteps = 0;
                     }
                     if (initialSteps == 0) {
-                        Log.green("Reached stop, it will loot soon.");
                         try {
                             Helper.getInstance().loot(target);
                         } catch (LoginFailedException | RemoteServerException e) {

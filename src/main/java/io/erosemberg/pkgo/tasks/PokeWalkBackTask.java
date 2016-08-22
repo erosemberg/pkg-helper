@@ -16,23 +16,24 @@ import java.util.concurrent.TimeUnit;
 public class PokeWalkBackTask implements Runnable {
 
     private PokemonGo go;
-    private Lat2Long initial;
 
     private ScheduledFuture<?> self;
 
-    public PokeWalkBackTask(PokemonGo go, Lat2Long initial) {
+    public PokeWalkBackTask(PokemonGo go) {
         this.go = go;
-        this.initial = initial;
     }
 
     @Override
     public void run() {
+        Lat2Long initial = Helper.getInstance().getStartLocation();
+        Log.debug("Initial latitude: " + initial.getLatitude().get() + " initial longitude: " + initial.getLongitude().get());
+        Log.debug("Current latitude: " + go.getLatitude() + " current longitude: " + go.getLongitude());
         S2LatLng end = S2LatLng.fromDegrees(initial.getLatitude().get(), initial.getLongitude().get());
         S2LatLng start = S2LatLng.fromDegrees(go.getLatitude(), go.getLongitude());
 
         S2LatLng difference = end.sub(start);
         double distance = start.getEarthDistance(end);
-
+        Log.debug("Distance to initial: " + distance);
         if (distance <= 2000) {
             return;
         }
@@ -45,7 +46,7 @@ public class PokeWalkBackTask implements Runnable {
             return;
         }
 
-        Log.green("Starting walk back task to initial location... ~" + Double.valueOf(distance).intValue() + "m away");
+        Log.green("Starting walk back task to initial location... ~" + Double.valueOf(distance).intValue() + "m away (ETA: " + Double.valueOf(time).intValue() + "s)");
 
         self = Helper.getInstance().schedule(new Runnable() {
             long initialSteps = steps[0];

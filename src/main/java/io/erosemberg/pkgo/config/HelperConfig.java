@@ -24,6 +24,8 @@ public class HelperConfig extends Config {
     private boolean useLuckyEggForEvolution = false;
     private int minCPForEvolution = 400;
 
+    private double walkingSpeed = 2.8;
+
     public String getEmail() {
         return email;
     }
@@ -70,5 +72,9 @@ public class HelperConfig extends Config {
 
     public void setLongitude(double longitude) {
         this.longitude = longitude;
+    }
+
+    public double getWalkingSpeed() {
+        return walkingSpeed;
     }
 }

@@ -2,6 +2,11 @@ package io.erosemberg.pkgo;
 
 import POGOProtos.Data.PlayerDataOuterClass;
 import POGOProtos.Networking.Responses.FortSearchResponseOuterClass;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import com.pokegoapi.api.PokemonGo;
 import com.pokegoapi.api.map.fort.Pokestop;
 import com.pokegoapi.api.map.fort.PokestopLootResult;
@@ -9,7 +14,6 @@ import com.pokegoapi.api.player.PlayerProfile;
 import com.pokegoapi.auth.GoogleAutoCredentialProvider;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
-import com.pokegoapi.util.SystemTimeImpl;
 import io.erosemberg.pkgo.config.HelperConfig;
 import io.erosemberg.pkgo.tasks.PokeEggHatcher;
 import io.erosemberg.pkgo.tasks.PokeEvolveTask;
@@ -22,8 +26,14 @@ import io.erosemberg.pkgo.util.ArrayUtil;
 import io.erosemberg.pkgo.util.Lat2Long;
 import io.erosemberg.pkgo.util.Log;
 import io.erosemberg.pkgo.util.Reference;
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
+import java.io.IOException;
 import java.util.Date;
 import java.util.Scanner;
 import java.util.concurrent.Executors;
@@ -49,6 +59,7 @@ public final class Helper {
     private Lat2Long location;
     private PokemonGo go;
     private String user;
+    private Lat2Long startLocation;
 
     private Helper() {
         service = Executors.newScheduledThreadPool(3, new ThreadFactory() {
@@ -78,6 +89,7 @@ public final class Helper {
             }
             String password = config.getPassword();
 
+            go = new PokemonGo(new GoogleAutoCredentialProvider(client, user, password), client);
             Scanner scanner = new Scanner(System.in);
             System.out.print("Do you wish to use last time's latitude and longitude (yes/no)? ");
             String input = scanner.next();
@@ -107,10 +119,16 @@ public final class Helper {
                 config.save();
             }
 
-            this.location = new Lat2Long(latitude, longitude);
+//            if (!config.isSnipe()) {
+//                this.location = new Lat2Long(latitude, longitude);
+//            } else {
+//                this.location = new Lat2Long(0.0D, 0.0D);
+//                snipe();
+//            }
 
-            go = new PokemonGo(new GoogleAutoCredentialProvider(client, user, password), client);
-            go.setLocation(latitude, longitude, 1);
+            this.location = new Lat2Long(latitude, longitude);
+            this.startLocation = new Lat2Long(latitude, longitude);
+            go.setLocation(location.getLatitude().get(), location.getLongitude().get(), 1);
             Log.green("Logged in successfully...initiating");
             Log.yellow("====================================================");
             Log.yellow("PokemonGo Helper version " + Reference.VERSION + " has initiated.");
@@ -124,7 +142,8 @@ public final class Helper {
             schedule(new PokeFinderTask(go), 0L, 5L, TimeUnit.SECONDS);
             schedule(new PokeStopTask(go), 30L, 30L, TimeUnit.SECONDS);
             schedule(new PokeEggHatcher(go), 0L, 1L, TimeUnit.MINUTES);
-            schedule(new PokeWalkBackTask(go, location), 5L, 5L, TimeUnit.MINUTES);
+            schedule(new PokeWalkBackTask(go), 0L, 5L, TimeUnit.MINUTES);
+            //schedule(new PokeSniperTask(go), 30L, 30L, TimeUnit.SECONDS);
             if (config.isEvolvePokemons()) {
                 schedule(new PokeEvolveTask(go), 0L, 5L, TimeUnit.MINUTES);
             }
@@ -157,7 +176,7 @@ public final class Helper {
         if (closest.canLoot()) {
             Log.debug("Pausing walking task to loot pokestop...");
             shouldWalk.set(false);
-            Log.green("Going to loot pokestop " + closest.getDetails().getName() + (closest.hasLure() ? "(currently lured)" : ""));
+            Log.green("Going to loot pokestop " + closest.getDetails().getName() + (closest.hasLure() ? " (currently lured)" : ""));
             PokestopLootResult result = closest.loot();
             if (result == null) {
                 Log.red("Pokestop had no loot result, skipping");
@@ -207,6 +226,73 @@ public final class Helper {
         }
     }
 
+    public Lat2Long getLocation() {
+        return location;
+    }
+
+    public void snipe() {
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder().url("http://pokesnipers.com/api/v1/pokemon.json").build();
+
+        Lat2Long loc = new Lat2Long(0.0D, 0.0D);
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.red("Failed to snipe pokemons, " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                ResponseBody body = response.body();
+                JsonParser parser = new JsonParser();
+                JsonObject object = parser.parse(body.string()).getAsJsonObject();
+                JsonArray results = object.getAsJsonArray("results");
+                String name = "Unknown";
+                boolean found = false;
+                for (JsonElement element : results) {
+                    if (element instanceof JsonObject) {
+                        JsonObject snipeable = (JsonObject) element;
+                        JsonPrimitive coordsObj = (JsonPrimitive) snipeable.get("coords");
+                        String coords = coordsObj.getAsString();
+                        String[] split = coords.split(",");
+                        if (split.length != 2) {
+                            continue;
+                        }
+                        double lat = Double.valueOf(split[0]);
+                        double longi = Double.valueOf(split[1]);
+
+                        lat += 0.003; //Add to avoid softban.
+                        longi += 0.003;
+
+                        loc.getLatitude().set(lat);
+                        loc.getLongitude().set(longi);
+                        JsonPrimitive n = (JsonPrimitive) snipeable.get("name");
+                        name = n.getAsString();
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) {
+                    Log.green("Sniping " + name + " at " + loc.toString());
+                    getLocation().getLongitude().set(loc.getLongitude().get());
+                    getLocation().getLatitude().set(loc.getLatitude().get());
+                    go.setLocation(loc.getLatitude().get(), loc.getLongitude().get(), 1.0D);
+
+                    if (PokeWalkTask.self != null) {
+                        Log.debug("Canceling pokestop task because we are sniping pokemons!");
+                        PokeWalkTask.self.cancel(true);
+                        PokeWalkTask.shouldWalk.set(true);
+                        PokeWalkTask.target = null;
+                    }
+                } else {
+                    Log.debug("Found no possible pokemons to snipe.");
+                }
+
+                response.body().close();
+            }
+        });
+    }
+
     public HelperConfig getConfig() {
         return config;
     }
@@ -215,4 +301,7 @@ public final class Helper {
         return self;
     }
 
+    public Lat2Long getStartLocation() {
+        return startLocation;
+    }
 }

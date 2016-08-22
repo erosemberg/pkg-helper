@@ -1,6 +1,7 @@
 package io.erosemberg.pkgo.util;
 
 import POGOProtos.Data.PokemonDataOuterClass;
+import com.pokegoapi.api.map.fort.FortDetails;
 
 /**
  * @author Erik Rosemberg
@@ -15,6 +16,10 @@ public class PokemonUtil {
     public static int getIVPercent(PokemonDataOuterClass.PokemonData pokemon) {
         int iv = getIV(pokemon);
         return (iv * 100) / 45;
+    }
+
+    public static String getName(FortDetails details) {
+        return details.getName();
     }
 
 }

@@ -3,6 +3,7 @@ package io.erosemberg.pkgo.tasks;
 import POGOProtos.Data.PokemonDataOuterClass;
 import POGOProtos.Networking.Responses.CatchPokemonResponseOuterClass;
 import com.pokegoapi.api.PokemonGo;
+import com.pokegoapi.api.inventory.ItemBag;
 import com.pokegoapi.api.map.pokemon.CatchResult;
 import com.pokegoapi.api.map.pokemon.CatchablePokemon;
 import com.pokegoapi.api.map.pokemon.encounter.DiskEncounterResult;
@@ -41,6 +42,11 @@ public class PokeFinderTask implements Runnable {
             List<CatchablePokemon> catchable = go.getMap().getCatchablePokemon();
 
             if (catchable.size() > 0) {
+                if (catchable.size() >= Helper.getInstance().getConfig().getMinNearbyPokemonsForIncense() && Helper.getInstance().getConfig().isUseIncense()) {
+                    ItemBag bag = go.getInventories().getItemBag();
+                    bag.useIncense();
+                    Log.debug("Using incense");
+                }
                 Log.debug("Found " + catchable.size() + " catchable pokemons.");
                 for (CatchablePokemon max : catchable) {
                     Log.green("Found a " + max.getPokemonId());
@@ -59,7 +65,7 @@ public class PokeFinderTask implements Runnable {
                         } else {
                             if (catchResult.getStatus() == CatchPokemonResponseOuterClass.CatchPokemonResponse.CatchStatus.CATCH_FLEE) {
                                 int counter = softBanConuter.addAndGet(1);
-                                if (counter >= 5) {
+                                if (counter >= 10) {
                                     shouldFind = false;
                                     Log.red("Possible soft-ban met, stopping the finder task for 2 minutes...");
                                     Helper.getInstance().scheduleLater(() -> {
@@ -76,6 +82,18 @@ public class PokeFinderTask implements Runnable {
                 }
             }
         } catch (LoginFailedException | RemoteServerException | NoSuchItemException ignored) {
+            if (ignored instanceof NoSuchItemException) {
+                Log.red("You have no pokeballs left! Shuting down the finder task for 10 minutes to replentish pokeballs in pokestops.");
+                if (!shouldFind) {
+                    return;
+                }
+                shouldFind = false;
+                Helper.getInstance().scheduleLater(() -> {
+                    shouldFind = true;
+                    softBanConuter.set(0);
+                    Log.green("10 minutes have passed, we should have pokeballs now!");
+                }, 10, TimeUnit.MINUTES);
+            }
         }
     }
 }
